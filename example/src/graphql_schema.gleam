@@ -117,12 +117,15 @@ fn post_to_value(post: database.Post) -> value.Value {
 /// Build the Query type
 pub fn query_type(conn: sqlight.Connection) -> schema.Type {
   schema.object_type("Query", "Root query type", [
-    schema.field("users", schema.list_type(user_type()), "Get all users", fn(
-      _ctx,
-    ) {
-      let users = database.get_users(conn)
-      Ok(value.List(list.map(users, user_to_value)))
-    }),
+    schema.field(
+      "users",
+      schema.list_type(user_type()),
+      "Get all users",
+      fn(_ctx) {
+        let users = database.get_users(conn)
+        Ok(value.List(list.map(users, user_to_value)))
+      },
+    ),
     schema.field_with_args(
       "user",
       user_type(),
@@ -158,12 +161,15 @@ pub fn query_type(conn: sqlight.Connection) -> schema.Type {
         }
       },
     ),
-    schema.field("posts", schema.list_type(post_type()), "Get all posts", fn(
-      _ctx,
-    ) {
-      let posts = database.get_posts(conn)
-      Ok(value.List(list.map(posts, post_to_value)))
-    }),
+    schema.field(
+      "posts",
+      schema.list_type(post_type()),
+      "Get all posts",
+      fn(_ctx) {
+        let posts = database.get_posts(conn)
+        Ok(value.List(list.map(posts, post_to_value)))
+      },
+    ),
     schema.field_with_args(
       "post",
       post_type(),

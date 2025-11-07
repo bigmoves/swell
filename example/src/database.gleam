@@ -83,10 +83,7 @@ pub fn get_users(conn: sqlight.Connection) -> List(User) {
 }
 
 /// Get a user by ID
-pub fn get_user(
-  conn: sqlight.Connection,
-  user_id: Int,
-) -> Result(User, String) {
+pub fn get_user(conn: sqlight.Connection, user_id: Int) -> Result(User, String) {
   let sql = "SELECT id, name, email FROM users WHERE id = ?"
 
   let decoder = {
@@ -97,7 +94,12 @@ pub fn get_user(
   }
 
   case
-    sqlight.query(sql, on: conn, with: [sqlight.int(user_id)], expecting: decoder)
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [sqlight.int(user_id)],
+      expecting: decoder,
+    )
   {
     Ok([user]) -> Ok(user)
     Ok([]) -> Error("User not found")
@@ -135,7 +137,12 @@ pub fn get_post(conn: sqlight.Connection, post_id: Int) -> Result(Post, String) 
   }
 
   case
-    sqlight.query(sql, on: conn, with: [sqlight.int(post_id)], expecting: decoder)
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [sqlight.int(post_id)],
+      expecting: decoder,
+    )
   {
     Ok([post]) -> Ok(post)
     Ok([]) -> Error("Post not found")
@@ -149,7 +156,8 @@ pub fn get_posts_by_author(
   conn: sqlight.Connection,
   author_id: Int,
 ) -> List(Post) {
-  let sql = "SELECT id, title, content, author_id FROM posts WHERE author_id = ?"
+  let sql =
+    "SELECT id, title, content, author_id FROM posts WHERE author_id = ?"
 
   let decoder = {
     use id <- decode.field(0, decode.int)
@@ -174,7 +182,8 @@ pub fn create_user(
   name: String,
   email: String,
 ) -> Result(User, String) {
-  let sql = "INSERT INTO users (name, email) VALUES (?, ?) RETURNING id, name, email"
+  let sql =
+    "INSERT INTO users (name, email) VALUES (?, ?) RETURNING id, name, email"
 
   let decoder = {
     use id <- decode.field(0, decode.int)
