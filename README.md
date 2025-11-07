@@ -1,5 +1,8 @@
 # Swell
 
+[![Package Version](https://img.shields.io/hexpm/v/example)](https://hex.pm/packages/swell)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/swell/)
+
 A GraphQL implementation in Gleam providing query parsing, execution, and introspection support.
 
 ![Swell](https://images.unsplash.com/photo-1616645728806-838c6bf184af?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2340)
