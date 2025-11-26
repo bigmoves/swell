@@ -638,3 +638,99 @@ pub fn parse_subscription_with_nested_fields_test() {
   }
   |> should.be_true
 }
+
+// List type variable tests
+pub fn parse_variable_with_list_type_test() {
+  "query Test($ids: [Int]) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("ids", "[Int]")],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_non_null_list_type_test() {
+  "query Test($ids: [Int]!) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("ids", "[Int]!")],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_list_of_non_null_type_test() {
+  "query Test($ids: [Int!]) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("ids", "[Int!]")],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_non_null_list_of_non_null_type_test() {
+  "query Test($ids: [Int!]!) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("ids", "[Int!]!")],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_mutation_with_list_variable_test() {
+  "mutation AddTags($tags: [String!]!) { addTags }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedMutation(
+          name: "AddTags",
+          variables: [parser.Variable("tags", "[String!]!")],
+          selections: parser.SelectionSet([parser.Field("addTags", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}

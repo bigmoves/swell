@@ -543,26 +543,53 @@ fn parse_variable_definitions_loop(
     // Skip commas
     [lexer.Comma, ..rest] -> parse_variable_definitions_loop(rest, acc)
 
-    // Parse a variable: $name: Type! or $name: Type
+    // Parse a variable: $name: Type! or $name: Type or $name: [Type]! or $name: [Type!]!
     [lexer.Dollar, lexer.Name(var_name), lexer.Colon, ..rest] -> {
-      // Parse the type (Name or Name!)
-      case rest {
-        [lexer.Name(type_name), lexer.Exclamation, ..rest2] -> {
-          // Non-null type
-          let variable = Variable(var_name, type_name <> "!")
+      // Parse the type
+      case parse_type_reference(rest) {
+        Ok(#(type_str, rest2)) -> {
+          let variable = Variable(var_name, type_str)
           parse_variable_definitions_loop(rest2, [variable, ..acc])
         }
-        [lexer.Name(type_name), ..rest2] -> {
-          // Nullable type
-          let variable = Variable(var_name, type_name)
-          parse_variable_definitions_loop(rest2, [variable, ..acc])
-        }
-        [] -> Error(UnexpectedEndOfInput("Expected type after :"))
-        [token, ..] -> Error(UnexpectedToken(token, "Expected type name"))
+        Error(err) -> Error(err)
       }
     }
 
     [] -> Error(UnexpectedEndOfInput("Expected variable definition or )"))
     [token, ..] -> Error(UnexpectedToken(token, "Expected $variableName or )"))
+  }
+}
+
+/// Parse a type reference (e.g., String, String!, [String], [String!], [String]!, [String!]!)
+fn parse_type_reference(
+  tokens: List(lexer.Token),
+) -> Result(#(String, List(lexer.Token)), ParseError) {
+  case tokens {
+    // List type: [Type] or [Type!] or [Type]! or [Type!]!
+    [lexer.BracketOpen, ..rest] -> {
+      case rest {
+        [lexer.Name(inner_type), lexer.Exclamation, lexer.BracketClose, lexer.Exclamation, ..rest2] ->
+          // [Type!]!
+          Ok(#("[" <> inner_type <> "!]!", rest2))
+        [lexer.Name(inner_type), lexer.Exclamation, lexer.BracketClose, ..rest2] ->
+          // [Type!]
+          Ok(#("[" <> inner_type <> "!]", rest2))
+        [lexer.Name(inner_type), lexer.BracketClose, lexer.Exclamation, ..rest2] ->
+          // [Type]!
+          Ok(#("[" <> inner_type <> "]!", rest2))
+        [lexer.Name(inner_type), lexer.BracketClose, ..rest2] ->
+          // [Type]
+          Ok(#("[" <> inner_type <> "]", rest2))
+        [] -> Error(UnexpectedEndOfInput("Expected type name in list"))
+        [token, ..] -> Error(UnexpectedToken(token, "Expected type name in list"))
+      }
+    }
+    // Simple type: Type! or Type
+    [lexer.Name(type_name), lexer.Exclamation, ..rest] ->
+      Ok(#(type_name <> "!", rest))
+    [lexer.Name(type_name), ..rest] ->
+      Ok(#(type_name, rest))
+    [] -> Error(UnexpectedEndOfInput("Expected type"))
+    [token, ..] -> Error(UnexpectedToken(token, "Expected type name"))
   }
 }
