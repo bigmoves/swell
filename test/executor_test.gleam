@@ -865,3 +865,81 @@ pub fn execute_mixed_aliased_fields_test() {
     content: format_response(response),
   )
 }
+
+pub fn execute_query_with_variable_default_value_test() {
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field_with_args(
+        "greet",
+        schema.string_type(),
+        "Greet someone",
+        [schema.argument("name", schema.string_type(), "Name to greet", None)],
+        fn(ctx) {
+          case schema.get_argument(ctx, "name") {
+            option.Some(value.String(name)) ->
+              Ok(value.String("Hello, " <> name <> "!"))
+            _ -> Ok(value.String("Hello, stranger!"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "query Test($name: String = \"World\") { greet(name: $name) }"
+
+  // No variables provided - should use default
+  let ctx = schema.context_with_variables(None, dict.new())
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  // Debug: print the actual result
+  let assert Ok(response) = result
+  let assert executor.Response(data: value.Object(fields), errors: _) = response
+  let assert Ok(greet_value) = list.key_find(fields, "greet")
+
+  // Should use default value "World" since no variable provided
+  greet_value
+  |> should.equal(value.String("Hello, World!"))
+}
+
+pub fn execute_query_with_variable_overriding_default_test() {
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field_with_args(
+        "greet",
+        schema.string_type(),
+        "Greet someone",
+        [schema.argument("name", schema.string_type(), "Name to greet", None)],
+        fn(ctx) {
+          case schema.get_argument(ctx, "name") {
+            option.Some(value.String(name)) ->
+              Ok(value.String("Hello, " <> name <> "!"))
+            _ -> Ok(value.String("Hello, stranger!"))
+          }
+        },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+  let query = "query Test($name: String = \"World\") { greet(name: $name) }"
+
+  // Provide variable - should override default
+  let variables = dict.from_list([#("name", value.String("Alice"))])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+  result
+  |> should.be_ok
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: _) -> {
+        case list.key_find(fields, "greet") {
+          Ok(value.String("Hello, Alice!")) -> True
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}

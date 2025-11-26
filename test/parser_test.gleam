@@ -484,7 +484,7 @@ pub fn parse_query_with_one_variable_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("name", "String!")],
+          variables: [parser.Variable("name", "String!", None)],
           selections: parser.SelectionSet([parser.Field("user", None, [], [])]),
         ),
       ]) -> True
@@ -504,8 +504,8 @@ pub fn parse_query_with_multiple_variables_test() {
         parser.NamedQuery(
           name: "Test",
           variables: [
-            parser.Variable("name", "String!"),
-            parser.Variable("age", "Int"),
+            parser.Variable("name", "String!", None),
+            parser.Variable("age", "Int", None),
           ],
           selections: parser.SelectionSet([parser.Field("user", None, [], [])]),
         ),
@@ -526,8 +526,8 @@ pub fn parse_mutation_with_variables_test() {
         parser.NamedMutation(
           name: "CreateUser",
           variables: [
-            parser.Variable("name", "String!"),
-            parser.Variable("email", "String!"),
+            parser.Variable("name", "String!", None),
+            parser.Variable("email", "String!", None),
           ],
           selections: parser.SelectionSet([
             parser.Field("createUser", None, [], []),
@@ -649,7 +649,7 @@ pub fn parse_variable_with_list_type_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("ids", "[Int]")],
+          variables: [parser.Variable("ids", "[Int]", None)],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -668,7 +668,7 @@ pub fn parse_variable_with_non_null_list_type_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("ids", "[Int]!")],
+          variables: [parser.Variable("ids", "[Int]!", None)],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -687,7 +687,7 @@ pub fn parse_variable_with_list_of_non_null_type_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("ids", "[Int!]")],
+          variables: [parser.Variable("ids", "[Int!]", None)],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -706,7 +706,7 @@ pub fn parse_variable_with_non_null_list_of_non_null_type_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("ids", "[Int!]!")],
+          variables: [parser.Variable("ids", "[Int!]!", None)],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -725,10 +725,129 @@ pub fn parse_mutation_with_list_variable_test() {
       parser.Document([
         parser.NamedMutation(
           name: "AddTags",
-          variables: [parser.Variable("tags", "[String!]!")],
+          variables: [parser.Variable("tags", "[String!]!", None)],
           selections: parser.SelectionSet([
             parser.Field("addTags", None, [], []),
           ]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_default_int_value_test() {
+  "query Test($count: Int = 20) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("count", "Int", option.Some(parser.IntValue("20")))],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+// Additional default value type tests
+pub fn parse_variable_with_default_string_value_test() {
+  "query Test($name: String = \"Alice\") { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("name", "String", option.Some(parser.StringValue("Alice")))],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_default_boolean_value_test() {
+  "query Test($active: Boolean = true) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("active", "Boolean", option.Some(parser.BooleanValue(True)))],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_default_null_value_test() {
+  "query Test($filter: String = null) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("filter", "String", option.Some(parser.NullValue))],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_default_enum_value_test() {
+  "query Test($sort: SortOrder = DESC) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [parser.Variable("sort", "SortOrder", option.Some(parser.EnumValue("DESC")))],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
+        ),
+      ]) -> True
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+pub fn parse_variable_with_mixed_defaults_test() {
+  "query Test($name: String!, $limit: Int = 10, $offset: Int) { users }"
+  |> parser.parse
+  |> should.be_ok
+  |> fn(doc) {
+    case doc {
+      parser.Document([
+        parser.NamedQuery(
+          name: "Test",
+          variables: [
+            parser.Variable("name", "String!", None),
+            parser.Variable("limit", "Int", option.Some(parser.IntValue("10"))),
+            parser.Variable("offset", "Int", None),
+          ],
+          selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
       _ -> False

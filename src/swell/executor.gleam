@@ -20,6 +20,30 @@ pub type Response {
   Response(data: value.Value, errors: List(GraphQLError))
 }
 
+/// Merge variable defaults with provided variables
+/// Provided variables take precedence over defaults
+fn apply_variable_defaults(
+  variables: List(parser.Variable),
+  provided: Dict(String, value.Value),
+  ctx: schema.Context,
+) -> Dict(String, value.Value) {
+  list.fold(variables, provided, fn(acc, var) {
+    case var {
+      parser.Variable(name, _, option.Some(default_val)) -> {
+        // Only apply default if variable not already provided
+        case dict.get(acc, name) {
+          Ok(_) -> acc
+          Error(_) -> {
+            let val = argument_value_to_value(default_val, ctx)
+            dict.insert(acc, name, val)
+          }
+        }
+      }
+      parser.Variable(_, _, option.None) -> acc
+    }
+  })
+}
+
 /// Get the response key for a field (alias if present, otherwise field name)
 fn response_key(field_name: String, alias: option.Option(String)) -> String {
   case alias {
@@ -125,13 +149,16 @@ fn execute_operation(
         [],
       )
     }
-    parser.NamedQuery(_, _, selection_set) -> {
+    parser.NamedQuery(_name, variables, selection_set) -> {
       let root_type = schema.query_type(graphql_schema)
+      // Apply variable defaults
+      let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
+      let ctx_with_defaults = schema.Context(ctx.data, ctx.arguments, merged_vars)
       execute_selection_set(
         selection_set,
         root_type,
         graphql_schema,
-        ctx,
+        ctx_with_defaults,
         fragments,
         [],
       )
@@ -151,18 +178,23 @@ fn execute_operation(
         option.None -> Error("Schema does not define a mutation type")
       }
     }
-    parser.NamedMutation(_, _, selection_set) -> {
+    parser.NamedMutation(_name, variables, selection_set) -> {
       // Get mutation root type from schema
       case schema.get_mutation_type(graphql_schema) {
-        option.Some(mutation_type) ->
+        option.Some(mutation_type) -> {
+          // Apply variable defaults
+          let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
+          let ctx_with_defaults =
+            schema.Context(ctx.data, ctx.arguments, merged_vars)
           execute_selection_set(
             selection_set,
             mutation_type,
             graphql_schema,
-            ctx,
+            ctx_with_defaults,
             fragments,
             [],
           )
+        }
         option.None -> Error("Schema does not define a mutation type")
       }
     }
@@ -181,18 +213,23 @@ fn execute_operation(
         option.None -> Error("Schema does not define a subscription type")
       }
     }
-    parser.NamedSubscription(_, _, selection_set) -> {
+    parser.NamedSubscription(_name, variables, selection_set) -> {
       // Get subscription root type from schema
       case schema.get_subscription_type(graphql_schema) {
-        option.Some(subscription_type) ->
+        option.Some(subscription_type) -> {
+          // Apply variable defaults
+          let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
+          let ctx_with_defaults =
+            schema.Context(ctx.data, ctx.arguments, merged_vars)
           execute_selection_set(
             selection_set,
             subscription_type,
             graphql_schema,
-            ctx,
+            ctx_with_defaults,
             fragments,
             [],
           )
+        }
         option.None -> Error("Schema does not define a subscription type")
       }
     }

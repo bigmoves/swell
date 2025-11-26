@@ -72,7 +72,7 @@ pub type ArgumentValue {
 
 /// Variable definition
 pub type Variable {
-  Variable(name: String, type_: String)
+  Variable(name: String, type_: String, default_value: Option(ArgumentValue))
 }
 
 pub type ParseError {
@@ -543,13 +543,29 @@ fn parse_variable_definitions_loop(
     // Skip commas
     [lexer.Comma, ..rest] -> parse_variable_definitions_loop(rest, acc)
 
-    // Parse a variable: $name: Type! or $name: Type or $name: [Type]! or $name: [Type!]!
+    // Parse a variable: $name: Type = defaultValue or $name: Type
     [lexer.Dollar, lexer.Name(var_name), lexer.Colon, ..rest] -> {
       // Parse the type
       case parse_type_reference(rest) {
         Ok(#(type_str, rest2)) -> {
-          let variable = Variable(var_name, type_str)
-          parse_variable_definitions_loop(rest2, [variable, ..acc])
+          // Check for default value
+          case rest2 {
+            [lexer.Equals, ..rest3] -> {
+              // Parse the default value
+              case parse_argument_value(rest3) {
+                Ok(#(default_val, rest4)) -> {
+                  let variable = Variable(var_name, type_str, Some(default_val))
+                  parse_variable_definitions_loop(rest4, [variable, ..acc])
+                }
+                Error(err) -> Error(err)
+              }
+            }
+            _ -> {
+              // No default value
+              let variable = Variable(var_name, type_str, None)
+              parse_variable_definitions_loop(rest2, [variable, ..acc])
+            }
+          }
         }
         Error(err) -> Error(err)
       }
