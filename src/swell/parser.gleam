@@ -568,7 +568,13 @@ fn parse_type_reference(
     // List type: [Type] or [Type!] or [Type]! or [Type!]!
     [lexer.BracketOpen, ..rest] -> {
       case rest {
-        [lexer.Name(inner_type), lexer.Exclamation, lexer.BracketClose, lexer.Exclamation, ..rest2] ->
+        [
+          lexer.Name(inner_type),
+          lexer.Exclamation,
+          lexer.BracketClose,
+          lexer.Exclamation,
+          ..rest2
+        ] ->
           // [Type!]!
           Ok(#("[" <> inner_type <> "!]!", rest2))
         [lexer.Name(inner_type), lexer.Exclamation, lexer.BracketClose, ..rest2] ->
@@ -581,14 +587,14 @@ fn parse_type_reference(
           // [Type]
           Ok(#("[" <> inner_type <> "]", rest2))
         [] -> Error(UnexpectedEndOfInput("Expected type name in list"))
-        [token, ..] -> Error(UnexpectedToken(token, "Expected type name in list"))
+        [token, ..] ->
+          Error(UnexpectedToken(token, "Expected type name in list"))
       }
     }
     // Simple type: Type! or Type
     [lexer.Name(type_name), lexer.Exclamation, ..rest] ->
       Ok(#(type_name <> "!", rest))
-    [lexer.Name(type_name), ..rest] ->
-      Ok(#(type_name, rest))
+    [lexer.Name(type_name), ..rest] -> Ok(#(type_name, rest))
     [] -> Error(UnexpectedEndOfInput("Expected type"))
     [token, ..] -> Error(UnexpectedToken(token, "Expected type name"))
   }

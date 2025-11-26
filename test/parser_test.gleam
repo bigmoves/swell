@@ -726,7 +726,9 @@ pub fn parse_mutation_with_list_variable_test() {
         parser.NamedMutation(
           name: "AddTags",
           variables: [parser.Variable("tags", "[String!]!")],
-          selections: parser.SelectionSet([parser.Field("addTags", None, [], [])]),
+          selections: parser.SelectionSet([
+            parser.Field("addTags", None, [], []),
+          ]),
         ),
       ]) -> True
       _ -> False
