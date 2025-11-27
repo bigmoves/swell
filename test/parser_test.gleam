@@ -746,7 +746,9 @@ pub fn parse_variable_with_default_int_value_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("count", "Int", option.Some(parser.IntValue("20")))],
+          variables: [
+            parser.Variable("count", "Int", option.Some(parser.IntValue("20"))),
+          ],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -766,7 +768,13 @@ pub fn parse_variable_with_default_string_value_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("name", "String", option.Some(parser.StringValue("Alice")))],
+          variables: [
+            parser.Variable(
+              "name",
+              "String",
+              option.Some(parser.StringValue("Alice")),
+            ),
+          ],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -785,7 +793,13 @@ pub fn parse_variable_with_default_boolean_value_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("active", "Boolean", option.Some(parser.BooleanValue(True)))],
+          variables: [
+            parser.Variable(
+              "active",
+              "Boolean",
+              option.Some(parser.BooleanValue(True)),
+            ),
+          ],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -804,7 +818,9 @@ pub fn parse_variable_with_default_null_value_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("filter", "String", option.Some(parser.NullValue))],
+          variables: [
+            parser.Variable("filter", "String", option.Some(parser.NullValue)),
+          ],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True
@@ -823,7 +839,13 @@ pub fn parse_variable_with_default_enum_value_test() {
       parser.Document([
         parser.NamedQuery(
           name: "Test",
-          variables: [parser.Variable("sort", "SortOrder", option.Some(parser.EnumValue("DESC")))],
+          variables: [
+            parser.Variable(
+              "sort",
+              "SortOrder",
+              option.Some(parser.EnumValue("DESC")),
+            ),
+          ],
           selections: parser.SelectionSet([parser.Field("users", None, [], [])]),
         ),
       ]) -> True

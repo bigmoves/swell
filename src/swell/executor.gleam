@@ -155,7 +155,8 @@ fn execute_operation(
       let root_type = schema.query_type(graphql_schema)
       // Apply variable defaults
       let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
-      let ctx_with_defaults = schema.Context(ctx.data, ctx.arguments, merged_vars)
+      let ctx_with_defaults =
+        schema.Context(ctx.data, ctx.arguments, merged_vars)
       execute_selection_set(
         selection_set,
         root_type,
@@ -185,7 +186,8 @@ fn execute_operation(
       case schema.get_mutation_type(graphql_schema) {
         option.Some(mutation_type) -> {
           // Apply variable defaults
-          let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
+          let merged_vars =
+            apply_variable_defaults(variables, ctx.variables, ctx)
           let ctx_with_defaults =
             schema.Context(ctx.data, ctx.arguments, merged_vars)
           execute_selection_set(
@@ -220,7 +222,8 @@ fn execute_operation(
       case schema.get_subscription_type(graphql_schema) {
         option.Some(subscription_type) -> {
           // Apply variable defaults
-          let merged_vars = apply_variable_defaults(variables, ctx.variables, ctx)
+          let merged_vars =
+            apply_variable_defaults(variables, ctx.variables, ctx)
           let ctx_with_defaults =
             schema.Context(ctx.data, ctx.arguments, merged_vars)
           execute_selection_set(
