@@ -2,6 +2,8 @@
 ///
 /// Executes GraphQL queries against a schema
 import gleam/dict.{type Dict}
+import gleam/float
+import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/set.{type Set}
@@ -924,8 +926,18 @@ fn argument_value_to_value(
   ctx: schema.Context,
 ) -> value.Value {
   case arg_value {
-    parser.IntValue(s) -> value.String(s)
-    parser.FloatValue(s) -> value.String(s)
+    parser.IntValue(s) -> {
+      case int.parse(s) {
+        Ok(n) -> value.Int(n)
+        Error(_) -> value.String(s)
+      }
+    }
+    parser.FloatValue(s) -> {
+      case float.parse(s) {
+        Ok(f) -> value.Float(f)
+        Error(_) -> value.String(s)
+      }
+    }
     parser.StringValue(s) -> value.String(s)
     parser.BooleanValue(b) -> value.Boolean(b)
     parser.NullValue -> value.Null

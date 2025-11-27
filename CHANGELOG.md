@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Integer and float literal arguments are now correctly converted to `value.Int` and `value.Float` instead of `value.String`
 - Fragment spread type condition matching now works correctly when parent type is wrapped in NonNull or List
 - Inline fragment type condition matching now works correctly with wrapped types
 - `__typename` introspection now returns the concrete type name without modifiers
