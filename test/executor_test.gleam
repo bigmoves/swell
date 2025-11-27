@@ -206,6 +206,58 @@ pub fn execute_simple_fragment_spread_test() {
   )
 }
 
+// Test for fragment spread on NonNull wrapped type
+pub fn execute_fragment_spread_on_non_null_type_test() {
+  // Create a schema where the user field returns a NonNull type
+  let user_type =
+    schema.object_type("User", "A user", [
+      schema.field("id", schema.id_type(), "User ID", fn(_ctx) {
+        Ok(value.String("123"))
+      }),
+      schema.field("name", schema.string_type(), "User name", fn(_ctx) {
+        Ok(value.String("Alice"))
+      }),
+    ])
+
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      // Wrap user_type in NonNull to test fragment type condition matching
+      schema.field("user", schema.non_null(user_type), "Get user", fn(_ctx) {
+        Ok(
+          value.Object([
+            #("id", value.String("123")),
+            #("name", value.String("Alice")),
+          ]),
+        )
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Fragment is defined on "User" (not "User!") - this should still work
+  let query =
+    "
+    fragment UserFields on User {
+      id
+      name
+    }
+
+    { user { ...UserFields } }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  let response = case result {
+    Ok(r) -> r
+    Error(_) -> panic as "Execution failed"
+  }
+
+  birdie.snap(
+    title: "Execute fragment spread on NonNull type",
+    content: format_response(response),
+  )
+}
+
 // Test for list fields with nested selections
 pub fn execute_list_with_nested_selections_test() {
   // Create a schema with a list field

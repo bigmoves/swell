@@ -322,8 +322,9 @@ fn execute_selection(
           type_condition,
           fragment_selection_set,
         )) -> {
-          // Check type condition
-          let current_type_name = schema.type_name(parent_type)
+          // Check type condition - use named_type_name to get the base type
+          // without NonNull/List wrappers, since fragments are defined on named types
+          let current_type_name = schema.named_type_name(parent_type)
           case type_condition == current_type_name {
             False -> {
               // Type condition doesn't match, skip this fragment
@@ -357,8 +358,9 @@ fn execute_selection(
       }
     }
     parser.InlineFragment(type_condition_opt, inline_selections) -> {
-      // Check type condition if present
-      let current_type_name = schema.type_name(parent_type)
+      // Check type condition if present - use named_type_name to get the base type
+      // without NonNull/List wrappers, since fragments are defined on named types
+      let current_type_name = schema.named_type_name(parent_type)
       let should_execute = case type_condition_opt {
         None -> True
         Some(type_condition) -> type_condition == current_type_name
@@ -396,7 +398,8 @@ fn execute_selection(
       // Handle introspection meta-fields
       case name {
         "__typename" -> {
-          let type_name = schema.type_name(parent_type)
+          // Use named_type_name to return the concrete type without modifiers
+          let type_name = schema.named_type_name(parent_type)
           Ok(#(key, value.String(type_name), []))
         }
         "__schema" -> {

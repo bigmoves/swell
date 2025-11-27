@@ -7,6 +7,13 @@
 - Support for variable default values (`$name: Type = defaultValue`)
 - Default values are applied during execution when variables are not provided
 - Provided variables override default values
+- New `schema.named_type_name` function to get the base type name without List/NonNull wrappers
+
+### Fixed
+
+- Fragment spread type condition matching now works correctly when parent type is wrapped in NonNull or List
+- Inline fragment type condition matching now works correctly with wrapped types
+- `__typename` introspection now returns the concrete type name without modifiers
 
 ### Breaking Changes
 

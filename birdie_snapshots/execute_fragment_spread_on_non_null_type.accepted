@@ -1,0 +1,7 @@
+---
+version: 1.4.1
+title: Execute fragment spread on NonNull type
+file: ./test/executor_test.gleam
+test_name: execute_fragment_spread_on_non_null_type_test
+---
+Response(Object([#("user", Object([#("id", String("123")), #("name", String("Alice"))]))]), [])

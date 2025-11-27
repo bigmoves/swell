@@ -239,6 +239,21 @@ pub fn type_name(t: Type) -> String {
   }
 }
 
+/// Get the named (base) type name, unwrapping List and NonNull wrappers.
+/// This is used for fragment type condition matching and __typename where
+/// we need the concrete type name without modifiers.
+pub fn named_type_name(t: Type) -> String {
+  case t {
+    ScalarType(name) -> name
+    ObjectType(name, _, _) -> name
+    InputObjectType(name, _, _) -> name
+    EnumType(name, _, _) -> name
+    UnionType(name, _, _, _) -> name
+    ListType(inner) -> named_type_name(inner)
+    NonNullType(inner) -> named_type_name(inner)
+  }
+}
+
 pub fn field_name(f: Field) -> String {
   case f {
     Field(name, _, _, _, _) -> name
