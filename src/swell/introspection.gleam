@@ -323,6 +323,12 @@ fn type_introspection(t: schema.Type) -> value.Value {
     desc -> value.String(desc)
   }
 
+  // isOneOf for INPUT_OBJECT types (GraphQL spec addition)
+  let is_one_of = case kind {
+    "INPUT_OBJECT" -> value.Boolean(False)
+    _ -> value.Null
+  }
+
   value.Object([
     #("kind", value.String(kind)),
     #("name", name),
@@ -333,6 +339,7 @@ fn type_introspection(t: schema.Type) -> value.Value {
     #("enumValues", enum_values),
     #("inputFields", input_fields),
     #("ofType", of_type),
+    #("isOneOf", is_one_of),
   ])
 }
 

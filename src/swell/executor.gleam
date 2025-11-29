@@ -501,148 +501,158 @@ fn execute_selection(
               Ok(#(key, value.Null, [error]))
             }
             Some(field) -> {
-              // Get the field's type for nested selections
-              let field_type_def = schema.field_type(field)
+              // Validate argument types before resolving
+              case validate_arguments(field, args_dict, [name, ..path]) {
+                Error(err) -> Ok(#(key, value.Null, [err]))
+                Ok(_) -> {
+                  // Get the field's type for nested selections
+                  let field_type_def = schema.field_type(field)
 
-              // Create context with arguments (preserve variables from parent context)
-              let field_ctx = schema.Context(ctx.data, args_dict, ctx.variables)
+                  // Create context with arguments (preserve variables from parent context)
+                  let field_ctx =
+                    schema.Context(ctx.data, args_dict, ctx.variables)
 
-              // Resolve the field
-              case schema.resolve_field(field, field_ctx) {
-                Error(err) -> {
-                  let error = GraphQLError(err, [name, ..path])
-                  Ok(#(key, value.Null, [error]))
-                }
-                Ok(field_value) -> {
-                  // If there are nested selections, recurse
-                  case nested_selections {
-                    [] -> Ok(#(key, field_value, []))
-                    _ -> {
-                      // Need to resolve nested fields
-                      case field_value {
-                        value.Object(_) -> {
-                          // Check if field_type_def is a union type
-                          // If so, resolve it to the concrete type first
-                          let type_to_use = case
-                            schema.is_union(field_type_def)
-                          {
-                            True -> {
-                              // Create context with the field value for type resolution
-                              let resolve_ctx =
-                                schema.context(option.Some(field_value))
-                              case
-                                schema.resolve_union_type(
-                                  field_type_def,
-                                  resolve_ctx,
-                                )
+                  // Resolve the field
+                  case schema.resolve_field(field, field_ctx) {
+                    Error(err) -> {
+                      let error = GraphQLError(err, [name, ..path])
+                      Ok(#(key, value.Null, [error]))
+                    }
+                    Ok(field_value) -> {
+                      // If there are nested selections, recurse
+                      case nested_selections {
+                        [] -> Ok(#(key, field_value, []))
+                        _ -> {
+                          // Need to resolve nested fields
+                          case field_value {
+                            value.Object(_) -> {
+                              // Check if field_type_def is a union type
+                              // If so, resolve it to the concrete type first
+                              let type_to_use = case
+                                schema.is_union(field_type_def)
                               {
-                                Ok(concrete_type) -> concrete_type
-                                Error(_) -> field_type_def
-                                // Fallback to union type if resolution fails
-                              }
-                            }
-                            False -> field_type_def
-                          }
-
-                          // Execute nested selections using the resolved type
-                          // Create new context with this object's data
-                          let object_ctx =
-                            schema.context(option.Some(field_value))
-                          let selection_set =
-                            parser.SelectionSet(nested_selections)
-                          case
-                            execute_selection_set(
-                              selection_set,
-                              type_to_use,
-                              graphql_schema,
-                              object_ctx,
-                              fragments,
-                              [name, ..path],
-                            )
-                          {
-                            Ok(#(nested_data, nested_errors)) ->
-                              Ok(#(key, nested_data, nested_errors))
-                            Error(err) -> {
-                              let error = GraphQLError(err, [name, ..path])
-                              Ok(#(key, value.Null, [error]))
-                            }
-                          }
-                        }
-                        value.List(items) -> {
-                          // Handle list with nested selections
-                          // Get the inner type from the LIST wrapper, unwrapping NonNull if needed
-                          let inner_type = case
-                            schema.inner_type(field_type_def)
-                          {
-                            option.Some(t) -> {
-                              // If the result is still wrapped (NonNull), unwrap it too
-                              case schema.inner_type(t) {
-                                option.Some(unwrapped) -> unwrapped
-                                option.None -> t
-                              }
-                            }
-                            option.None -> field_type_def
-                          }
-
-                          // Execute nested selections on each item
-                          let selection_set =
-                            parser.SelectionSet(nested_selections)
-                          let results =
-                            list.map(items, fn(item) {
-                              // Check if inner_type is a union and resolve it
-                              let item_type = case schema.is_union(inner_type) {
                                 True -> {
-                                  // Create context with the item value for type resolution
+                                  // Create context with the field value for type resolution
                                   let resolve_ctx =
-                                    schema.context(option.Some(item))
+                                    schema.context(option.Some(field_value))
                                   case
                                     schema.resolve_union_type(
-                                      inner_type,
+                                      field_type_def,
                                       resolve_ctx,
                                     )
                                   {
                                     Ok(concrete_type) -> concrete_type
-                                    Error(_) -> inner_type
+                                    Error(_) -> field_type_def
                                     // Fallback to union type if resolution fails
                                   }
                                 }
-                                False -> inner_type
+                                False -> field_type_def
                               }
 
-                              // Create context with this item's data
-                              let item_ctx = schema.context(option.Some(item))
-                              execute_selection_set(
-                                selection_set,
-                                item_type,
-                                graphql_schema,
-                                item_ctx,
-                                fragments,
-                                [name, ..path],
-                              )
-                            })
-
-                          // Collect results and errors
-                          let processed_items =
-                            results
-                            |> list.filter_map(fn(r) {
-                              case r {
-                                Ok(#(val, _)) -> Ok(val)
-                                Error(_) -> Error(Nil)
+                              // Execute nested selections using the resolved type
+                              // Create new context with this object's data
+                              let object_ctx =
+                                schema.context(option.Some(field_value))
+                              let selection_set =
+                                parser.SelectionSet(nested_selections)
+                              case
+                                execute_selection_set(
+                                  selection_set,
+                                  type_to_use,
+                                  graphql_schema,
+                                  object_ctx,
+                                  fragments,
+                                  [name, ..path],
+                                )
+                              {
+                                Ok(#(nested_data, nested_errors)) ->
+                                  Ok(#(key, nested_data, nested_errors))
+                                Error(err) -> {
+                                  let error = GraphQLError(err, [name, ..path])
+                                  Ok(#(key, value.Null, [error]))
+                                }
                               }
-                            })
-
-                          let all_errors =
-                            results
-                            |> list.flat_map(fn(r) {
-                              case r {
-                                Ok(#(_, errs)) -> errs
-                                Error(_) -> []
+                            }
+                            value.List(items) -> {
+                              // Handle list with nested selections
+                              // Get the inner type from the LIST wrapper, unwrapping NonNull if needed
+                              let inner_type = case
+                                schema.inner_type(field_type_def)
+                              {
+                                option.Some(t) -> {
+                                  // If the result is still wrapped (NonNull), unwrap it too
+                                  case schema.inner_type(t) {
+                                    option.Some(unwrapped) -> unwrapped
+                                    option.None -> t
+                                  }
+                                }
+                                option.None -> field_type_def
                               }
-                            })
 
-                          Ok(#(key, value.List(processed_items), all_errors))
+                              // Execute nested selections on each item
+                              let selection_set =
+                                parser.SelectionSet(nested_selections)
+                              let results =
+                                list.map(items, fn(item) {
+                                  // Check if inner_type is a union and resolve it
+                                  let item_type = case
+                                    schema.is_union(inner_type)
+                                  {
+                                    True -> {
+                                      // Create context with the item value for type resolution
+                                      let resolve_ctx =
+                                        schema.context(option.Some(item))
+                                      case
+                                        schema.resolve_union_type(
+                                          inner_type,
+                                          resolve_ctx,
+                                        )
+                                      {
+                                        Ok(concrete_type) -> concrete_type
+                                        Error(_) -> inner_type
+                                        // Fallback to union type if resolution fails
+                                      }
+                                    }
+                                    False -> inner_type
+                                  }
+
+                                  // Create context with this item's data
+                                  let item_ctx =
+                                    schema.context(option.Some(item))
+                                  execute_selection_set(
+                                    selection_set,
+                                    item_type,
+                                    graphql_schema,
+                                    item_ctx,
+                                    fragments,
+                                    [name, ..path],
+                                  )
+                                })
+
+                              // Collect results and errors
+                              let processed_items =
+                                results
+                                |> list.filter_map(fn(r) {
+                                  case r {
+                                    Ok(#(val, _)) -> Ok(val)
+                                    Error(_) -> Error(Nil)
+                                  }
+                                })
+
+                              let all_errors =
+                                results
+                                |> list.flat_map(fn(r) {
+                                  case r {
+                                    Ok(#(_, errs)) -> errs
+                                    Error(_) -> []
+                                  }
+                                })
+
+                              Ok(#(key, value.List(processed_items), all_errors))
+                            }
+                            _ -> Ok(#(key, field_value, []))
+                          }
                         }
-                        _ -> Ok(#(key, field_value, []))
                       }
                     }
                   }
@@ -977,6 +987,67 @@ fn arguments_to_dict(
         let value = argument_value_to_value(arg_value, ctx)
         dict.insert(acc, name, value)
       }
+    }
+  })
+}
+
+/// Validate that an argument value matches its declared type
+fn validate_argument_type(
+  arg_name: String,
+  expected_type: schema.Type,
+  actual_value: value.Value,
+  path: List(String),
+) -> Result(Nil, GraphQLError) {
+  // Unwrap NonNull wrapper to get the base type (but not List wrapper)
+  let base_type = case schema.is_non_null(expected_type) {
+    True ->
+      case schema.inner_type(expected_type) {
+        option.Some(inner) -> inner
+        option.None -> expected_type
+      }
+    False -> expected_type
+  }
+
+  case schema.is_list(base_type), actual_value {
+    // List type expects a list value - reject object
+    True, value.Object(_) ->
+      Error(GraphQLError(
+        "Argument '"
+          <> arg_name
+          <> "' expects a list, not an object. Use ["
+          <> arg_name
+          <> ": {...}] instead of "
+          <> arg_name
+          <> ": {...}",
+        path,
+      ))
+    // All other cases are ok (for now - can add more validation later)
+    _, _ -> Ok(Nil)
+  }
+}
+
+/// Validate all provided arguments against a field's declared argument types
+fn validate_arguments(
+  field: schema.Field,
+  args_dict: Dict(String, value.Value),
+  path: List(String),
+) -> Result(Nil, GraphQLError) {
+  let declared_args = schema.field_arguments(field)
+
+  // For each provided argument, check if it matches the declared type
+  list.try_each(dict.to_list(args_dict), fn(arg_pair) {
+    let #(arg_name, arg_value) = arg_pair
+
+    // Find the declared argument
+    case
+      list.find(declared_args, fn(a) { schema.argument_name(a) == arg_name })
+    {
+      Ok(declared_arg) -> {
+        let expected_type = schema.argument_type(declared_arg)
+        validate_argument_type(arg_name, expected_type, arg_value, path)
+      }
+      Error(_) -> Ok(Nil)
+      // Unknown argument - let schema handle it
     }
   })
 }

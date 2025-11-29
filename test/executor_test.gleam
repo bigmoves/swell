@@ -995,3 +995,92 @@ pub fn execute_query_with_variable_overriding_default_test() {
   }
   |> should.be_true
 }
+
+// Test: List argument rejects object value
+pub fn list_argument_rejects_object_test() {
+  // Create a schema with a field that has a list argument
+  let list_arg_field =
+    schema.field_with_args(
+      "items",
+      schema.string_type(),
+      "Test field with list arg",
+      [
+        schema.argument(
+          "ids",
+          schema.list_type(schema.string_type()),
+          "List of IDs",
+          None,
+        ),
+      ],
+      fn(_ctx) { Ok(value.String("test")) },
+    )
+
+  let query_type = schema.object_type("Query", "Root", [list_arg_field])
+  let s = schema.schema(query_type, None)
+
+  // Query with object instead of list should produce an error
+  let query = "{ items(ids: {foo: \"bar\"}) }"
+  let result = executor.execute(query, s, schema.context(None))
+
+  case result {
+    Ok(executor.Response(_, errors)) -> {
+      // Should have exactly one error
+      list.length(errors)
+      |> should.equal(1)
+
+      // Check error message mentions list vs object
+      case list.first(errors) {
+        Ok(executor.GraphQLError(message, _)) -> {
+          string.contains(message, "expects a list")
+          |> should.be_true
+          string.contains(message, "not an object")
+          |> should.be_true
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+// Test: List argument accepts list value (sanity check)
+pub fn list_argument_accepts_list_test() {
+  // Create a schema with a field that has a list argument
+  let list_arg_field =
+    schema.field_with_args(
+      "items",
+      schema.string_type(),
+      "Test field with list arg",
+      [
+        schema.argument(
+          "ids",
+          schema.list_type(schema.string_type()),
+          "List of IDs",
+          None,
+        ),
+      ],
+      fn(_ctx) { Ok(value.String("success")) },
+    )
+
+  let query_type = schema.object_type("Query", "Root", [list_arg_field])
+  let s = schema.schema(query_type, None)
+
+  // Query with proper list should work
+  let query = "{ items(ids: [\"a\", \"b\"]) }"
+  let result = executor.execute(query, s, schema.context(None))
+
+  case result {
+    Ok(executor.Response(value.Object(fields), errors)) -> {
+      // Should have no errors
+      list.length(errors)
+      |> should.equal(0)
+
+      // Should return the value
+      case list.key_find(fields, "items") {
+        Ok(value.String("success")) -> should.be_true(True)
+        _ -> should.fail()
+      }
+    }
+    _ -> should.fail()
+  }
+}
