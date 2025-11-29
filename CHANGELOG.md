@@ -1,11 +1,12 @@
 # Changelog
 
-## 2.0.1
+## 2.1.0
 
 ### Added
 
 - Argument type validation: list arguments now produce helpful errors when passed objects instead of lists
 - `isOneOf` field in type introspection for INPUT_OBJECT types (GraphQL spec compliance)
+- Introspection types are now returned in alphabetical order by name
 
 ## 2.0.0
 

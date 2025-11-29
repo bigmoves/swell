@@ -3,6 +3,7 @@
 /// Comprehensive tests for introspection queries
 import gleam/list
 import gleam/option.{None}
+import gleam/string
 import gleeunit/should
 import swell/executor
 import swell/schema
@@ -664,6 +665,53 @@ pub fn simple_type_fragment_test() {
                 // No error, check if we have actual fields
                 type_fields != []
               }
+            }
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
+
+/// Test: Introspection types are returned in alphabetical order
+/// Verifies that __schema.types are sorted alphabetically by name
+pub fn schema_types_alphabetical_order_test() {
+  let schema = test_schema()
+  let query = "{ __schema { types { name } } }"
+
+  let result = executor.execute(query, schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__schema") {
+          Ok(value.Object(schema_fields)) -> {
+            case list.key_find(schema_fields, "types") {
+              Ok(value.List(types)) -> {
+                // Extract type names
+                let names =
+                  list.filter_map(types, fn(type_val) {
+                    case type_val {
+                      value.Object(type_fields) -> {
+                        case list.key_find(type_fields, "name") {
+                          Ok(value.String(name)) -> Ok(name)
+                          _ -> Error(Nil)
+                        }
+                      }
+                      _ -> Error(Nil)
+                    }
+                  })
+
+                // Check that names are sorted alphabetically
+                // Expected order: Boolean, Float, ID, Int, Query, String
+                let sorted_names = list.sort(names, string.compare)
+                names == sorted_names
+              }
+              _ -> False
             }
           }
           _ -> False

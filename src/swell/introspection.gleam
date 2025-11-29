@@ -6,6 +6,7 @@ import gleam/dict
 import gleam/list
 import gleam/option
 import gleam/result
+import gleam/string
 import swell/schema
 import swell/value
 
@@ -108,8 +109,10 @@ pub fn get_all_schema_types(graphql_schema: schema.Schema) -> List(schema.Type) 
 fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
   let all_types = get_all_schema_types(graphql_schema)
 
-  // Convert all types to introspection values
-  list.map(all_types, type_introspection)
+  // Sort types alphabetically by name, then convert to introspection values
+  all_types
+  |> list.sort(fn(a, b) { string.compare(schema.type_name(a), schema.type_name(b)) })
+  |> list.map(type_introspection)
 }
 
 /// Deduplicate types by name, keeping the version with the most fields
