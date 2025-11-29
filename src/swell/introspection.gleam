@@ -111,7 +111,9 @@ fn get_all_types(graphql_schema: schema.Schema) -> List(value.Value) {
 
   // Sort types alphabetically by name, then convert to introspection values
   all_types
-  |> list.sort(fn(a, b) { string.compare(schema.type_name(a), schema.type_name(b)) })
+  |> list.sort(fn(a, b) {
+    string.compare(schema.type_name(a), schema.type_name(b))
+  })
   |> list.map(type_introspection)
 }
 
