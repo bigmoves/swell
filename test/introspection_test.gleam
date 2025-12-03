@@ -722,3 +722,103 @@ pub fn schema_types_alphabetical_order_test() {
   }
   |> should.be_true
 }
+
+/// Test: Union type introspection returns possibleTypes
+/// Verifies that introspecting a union type correctly returns all possible types
+pub fn union_type_possible_types_test() {
+  // Create object types that will be part of the union
+  let post_type =
+    schema.object_type("Post", "A blog post", [
+      schema.field("title", schema.string_type(), "Post title", fn(_ctx) {
+        Ok(value.String("test"))
+      }),
+    ])
+
+  let comment_type =
+    schema.object_type("Comment", "A comment", [
+      schema.field("text", schema.string_type(), "Comment text", fn(_ctx) {
+        Ok(value.String("test"))
+      }),
+    ])
+
+  // Type resolver for the union
+  let type_resolver = fn(_ctx: schema.Context) -> Result(String, String) {
+    Ok("Post")
+  }
+
+  // Create union type
+  let search_result_union =
+    schema.union_type(
+      "SearchResult",
+      "A search result",
+      [post_type, comment_type],
+      type_resolver,
+    )
+
+  // Create query type that uses the union
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field(
+        "search",
+        schema.list_type(search_result_union),
+        "Search results",
+        fn(_ctx) { Ok(value.List([])) },
+      ),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query for union type's possibleTypes
+  let query =
+    "{ __type(name: \"SearchResult\") { name kind possibleTypes { name } } }"
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  should.be_ok(result)
+  |> fn(response) {
+    case response {
+      executor.Response(data: value.Object(fields), errors: []) -> {
+        case list.key_find(fields, "__type") {
+          Ok(value.Object(type_fields)) -> {
+            // Check it's a UNION
+            let is_union = case list.key_find(type_fields, "kind") {
+              Ok(value.String("UNION")) -> True
+              _ -> False
+            }
+
+            // Check possibleTypes contains both Post and Comment
+            let has_possible_types = case
+              list.key_find(type_fields, "possibleTypes")
+            {
+              Ok(value.List(possible_types)) -> {
+                let names =
+                  list.filter_map(possible_types, fn(pt) {
+                    case pt {
+                      value.Object(pt_fields) -> {
+                        case list.key_find(pt_fields, "name") {
+                          Ok(value.String(name)) -> Ok(name)
+                          _ -> Error(Nil)
+                        }
+                      }
+                      _ -> Error(Nil)
+                    }
+                  })
+
+                // Should have exactly 2 possible types: Comment and Post
+                list.length(names) == 2
+                && list.contains(names, "Post")
+                && list.contains(names, "Comment")
+              }
+              _ -> False
+            }
+
+            is_union && has_possible_types
+          }
+          _ -> False
+        }
+      }
+      _ -> False
+    }
+  }
+  |> should.be_true
+}
