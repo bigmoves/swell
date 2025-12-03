@@ -598,11 +598,14 @@ fn execute_selection(
                                   // Check if inner_type is a union and resolve it
                                   // Need to unwrap NonNull to check for union since inner_type
                                   // could be NonNull[Union] after unwrapping List[NonNull[Union]]
-                                  let unwrapped_inner = case schema.inner_type(inner_type) {
+                                  let unwrapped_inner = case
+                                    schema.inner_type(inner_type)
+                                  {
                                     option.Some(t) -> t
                                     option.None -> inner_type
                                   }
-                                  let item_type = case schema.is_union(unwrapped_inner)
+                                  let item_type = case
+                                    schema.is_union(unwrapped_inner)
                                   {
                                     True -> {
                                       // Create context with the item value for type resolution
