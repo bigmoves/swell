@@ -576,6 +576,7 @@ fn execute_selection(
                             value.List(items) -> {
                               // Handle list with nested selections
                               // Get the inner type from the LIST wrapper, unwrapping NonNull if needed
+                              // Field type could be: NonNull[List[NonNull[Union]]] or List[NonNull[Union]] etc.
                               let inner_type = case
                                 schema.inner_type(field_type_def)
                               {
@@ -595,8 +596,13 @@ fn execute_selection(
                               let results =
                                 list.map(items, fn(item) {
                                   // Check if inner_type is a union and resolve it
-                                  let item_type = case
-                                    schema.is_union(inner_type)
+                                  // Need to unwrap NonNull to check for union since inner_type
+                                  // could be NonNull[Union] after unwrapping List[NonNull[Union]]
+                                  let unwrapped_inner = case schema.inner_type(inner_type) {
+                                    option.Some(t) -> t
+                                    option.None -> inner_type
+                                  }
+                                  let item_type = case schema.is_union(unwrapped_inner)
                                   {
                                     True -> {
                                       // Create context with the item value for type resolution
@@ -604,7 +610,7 @@ fn execute_selection(
                                         schema.context(option.Some(item))
                                       case
                                         schema.resolve_union_type(
-                                          inner_type,
+                                          unwrapped_inner,
                                           resolve_ctx,
                                         )
                                       {
