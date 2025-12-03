@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.1
+
+### Fixed
+
+- Inline fragments on union types within arrays now resolve correctly (was skipping union type resolution for `List[NonNull[Union]]` items)
+- Union types are now always traversed during introspection on first encounter, ensuring their `possibleTypes` are properly collected
+
 ## 2.1.0
 
 ### Added
