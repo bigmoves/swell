@@ -187,24 +187,33 @@ fn collect_types_from_type(
     schema.is_object(t) || schema.is_enum(t) || schema.is_union(t)
   {
     True -> {
-      let current_content_count = get_type_content_count(t)
       let existing_with_same_name =
         list.filter(acc, fn(existing) {
           schema.type_name(existing) == schema.type_name(t)
         })
-      let max_existing_content =
-        existing_with_same_name
-        |> list.map(get_type_content_count)
-        |> list.reduce(fn(a, b) {
-          case a > b {
-            True -> a
-            False -> b
-          }
-        })
-        |> result.unwrap(0)
 
-      // Only traverse if this instance has more content than we've seen before
-      current_content_count > max_existing_content
+      // If this is the first time we've seen this type name, always traverse
+      // This is critical for unions which have 0 content count but still need
+      // their possible_types to be traversed
+      case list.is_empty(existing_with_same_name) {
+        True -> True
+        False -> {
+          // For subsequent encounters, only traverse if this instance has more content
+          let current_content_count = get_type_content_count(t)
+          let max_existing_content =
+            existing_with_same_name
+            |> list.map(get_type_content_count)
+            |> list.reduce(fn(a, b) {
+              case a > b {
+                True -> a
+                False -> b
+              }
+            })
+            |> result.unwrap(0)
+
+          current_content_count > max_existing_content
+        }
+      }
     }
     False -> True
   }
