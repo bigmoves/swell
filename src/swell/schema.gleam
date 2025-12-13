@@ -471,6 +471,18 @@ pub fn get_possible_types(t: Type) -> List(Type) {
   }
 }
 
+/// Get the type resolver function from a union type.
+/// The type resolver is called at runtime to determine which concrete type
+/// a union value represents, based on the data in the context.
+/// Returns a default resolver that always errors for non-union types.
+/// This is primarily used internally for union type normalization.
+pub fn get_union_type_resolver(t: Type) -> fn(Context) -> Result(String, String) {
+  case t {
+    UnionType(_, _, _, type_resolver) -> type_resolver
+    _ -> fn(_) { Error("Not a union type") }
+  }
+}
+
 /// Resolve a union type to its concrete type using the type resolver
 pub fn resolve_union_type(t: Type, ctx: Context) -> Result(Type, String) {
   case t {
@@ -490,6 +502,38 @@ pub fn resolve_union_type(t: Type, ctx: Context) -> Result(Type, String) {
                 "Type resolver returned '"
                 <> resolved_type_name
                 <> "' which is not a possible type of this union",
+              )
+          }
+        }
+        Error(err) -> Error(err)
+      }
+    }
+    _ -> Error("Cannot resolve non-union type")
+  }
+}
+
+/// Resolve a union type using a canonical type registry
+/// This looks up the concrete type by name from the registry instead of from
+/// the union's possible_types, ensuring we get the most complete type definition
+pub fn resolve_union_type_with_registry(
+  t: Type,
+  ctx: Context,
+  type_registry: dict.Dict(String, Type),
+) -> Result(Type, String) {
+  case t {
+    UnionType(_, _, _, type_resolver) -> {
+      // Call the type resolver to get the concrete type name
+      case type_resolver(ctx) {
+        Ok(resolved_type_name) -> {
+          // Look up the type from the canonical registry
+          case dict.get(type_registry, resolved_type_name) {
+            Ok(concrete_type) -> Ok(concrete_type)
+            Error(_) ->
+              Error(
+                "Type resolver returned '"
+                <> resolved_type_name
+                <> "' which is not in the type registry. "
+                <> "This may indicate the schema is incomplete or the type resolver is misconfigured.",
               )
           }
         }

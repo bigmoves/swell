@@ -65,13 +65,26 @@ pub fn execute(
     Error(parse_error) ->
       Error("Parse error: " <> format_parse_error(parse_error))
     Ok(document) -> {
+      // Build canonical type registry for union resolution
+      // This ensures we use the most complete version of each type
+      let type_registry = build_type_registry(graphql_schema)
+
       // Execute the document
-      case execute_document(document, graphql_schema, ctx) {
+      case execute_document(document, graphql_schema, ctx, type_registry) {
         Ok(#(data, errors)) -> Ok(Response(data, errors))
         Error(err) -> Error(err)
       }
     }
   }
+}
+
+/// Build a canonical type registry from the schema
+/// Uses introspection's logic to get deduplicated types with most fields
+fn build_type_registry(
+  graphql_schema: schema.Schema,
+) -> Dict(String, schema.Type) {
+  let all_types = introspection.get_all_schema_types(graphql_schema)
+  introspection.build_type_map(all_types)
 }
 
 fn format_parse_error(err: parser.ParseError) -> String {
@@ -87,6 +100,7 @@ fn execute_document(
   document: parser.Document,
   graphql_schema: schema.Schema,
   ctx: schema.Context,
+  type_registry: Dict(String, schema.Type),
 ) -> Result(#(value.Value, List(GraphQLError)), String) {
   case document {
     parser.Document(operations) -> {
@@ -99,7 +113,13 @@ fn execute_document(
       // Execute the first executable operation
       case executable_ops {
         [operation, ..] ->
-          execute_operation(operation, graphql_schema, ctx, fragments_dict)
+          execute_operation(
+            operation,
+            graphql_schema,
+            ctx,
+            fragments_dict,
+            type_registry,
+          )
         [] -> Error("No executable operations in document")
       }
     }
@@ -138,6 +158,7 @@ fn execute_operation(
   graphql_schema: schema.Schema,
   ctx: schema.Context,
   fragments: Dict(String, parser.Operation),
+  type_registry: Dict(String, schema.Type),
 ) -> Result(#(value.Value, List(GraphQLError)), String) {
   case operation {
     parser.Query(selection_set) -> {
@@ -149,6 +170,7 @@ fn execute_operation(
         ctx,
         fragments,
         [],
+        type_registry,
       )
     }
     parser.NamedQuery(_name, variables, selection_set) -> {
@@ -164,6 +186,7 @@ fn execute_operation(
         ctx_with_defaults,
         fragments,
         [],
+        type_registry,
       )
     }
     parser.Mutation(selection_set) -> {
@@ -177,6 +200,7 @@ fn execute_operation(
             ctx,
             fragments,
             [],
+            type_registry,
           )
         option.None -> Error("Schema does not define a mutation type")
       }
@@ -197,6 +221,7 @@ fn execute_operation(
             ctx_with_defaults,
             fragments,
             [],
+            type_registry,
           )
         }
         option.None -> Error("Schema does not define a mutation type")
@@ -213,6 +238,7 @@ fn execute_operation(
             ctx,
             fragments,
             [],
+            type_registry,
           )
         option.None -> Error("Schema does not define a subscription type")
       }
@@ -233,6 +259,7 @@ fn execute_operation(
             ctx_with_defaults,
             fragments,
             [],
+            type_registry,
           )
         }
         option.None -> Error("Schema does not define a subscription type")
@@ -251,6 +278,7 @@ fn execute_selection_set(
   ctx: schema.Context,
   fragments: Dict(String, parser.Operation),
   path: List(String),
+  type_registry: Dict(String, schema.Type),
 ) -> Result(#(value.Value, List(GraphQLError)), String) {
   case selection_set {
     parser.SelectionSet(selections) -> {
@@ -263,6 +291,7 @@ fn execute_selection_set(
             ctx,
             fragments,
             path,
+            type_registry,
           )
         })
 
@@ -316,6 +345,7 @@ fn execute_selection(
   ctx: schema.Context,
   fragments: Dict(String, parser.Operation),
   path: List(String),
+  type_registry: Dict(String, schema.Type),
 ) -> Result(#(String, value.Value, List(GraphQLError)), String) {
   case selection {
     parser.FragmentSpread(name) -> {
@@ -346,6 +376,7 @@ fn execute_selection(
                   ctx,
                   fragments,
                   path,
+                  type_registry,
                 )
               {
                 Ok(#(value.Object(fields), errs)) -> {
@@ -383,6 +414,7 @@ fn execute_selection(
               ctx,
               fragments,
               path,
+              type_registry,
             )
           {
             Ok(#(value.Object(fields), errs)) ->
@@ -527,7 +559,7 @@ fn execute_selection(
                           case field_value {
                             value.Object(_) -> {
                               // Check if field_type_def is a union type
-                              // If so, resolve it to the concrete type first
+                              // If so, resolve it to the concrete type first using the registry
                               let type_to_use = case
                                 schema.is_union(field_type_def)
                               {
@@ -536,9 +568,10 @@ fn execute_selection(
                                   let resolve_ctx =
                                     schema.context(option.Some(field_value))
                                   case
-                                    schema.resolve_union_type(
+                                    schema.resolve_union_type_with_registry(
                                       field_type_def,
                                       resolve_ctx,
+                                      type_registry,
                                     )
                                   {
                                     Ok(concrete_type) -> concrete_type
@@ -563,6 +596,7 @@ fn execute_selection(
                                   object_ctx,
                                   fragments,
                                   [name, ..path],
+                                  type_registry,
                                 )
                               {
                                 Ok(#(nested_data, nested_errors)) ->
@@ -595,7 +629,7 @@ fn execute_selection(
                                 parser.SelectionSet(nested_selections)
                               let results =
                                 list.map(items, fn(item) {
-                                  // Check if inner_type is a union and resolve it
+                                  // Check if inner_type is a union and resolve it using the registry
                                   // Need to unwrap NonNull to check for union since inner_type
                                   // could be NonNull[Union] after unwrapping List[NonNull[Union]]
                                   let unwrapped_inner = case
@@ -612,9 +646,10 @@ fn execute_selection(
                                       let resolve_ctx =
                                         schema.context(option.Some(item))
                                       case
-                                        schema.resolve_union_type(
+                                        schema.resolve_union_type_with_registry(
                                           unwrapped_inner,
                                           resolve_ctx,
+                                          type_registry,
                                         )
                                       {
                                         Ok(concrete_type) -> concrete_type
@@ -635,6 +670,7 @@ fn execute_selection(
                                     item_ctx,
                                     fragments,
                                     [name, ..path],
+                                    type_registry,
                                   )
                                 })
 

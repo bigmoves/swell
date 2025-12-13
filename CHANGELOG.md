@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.2
+
+### Fixed
+
+- Union type resolution now uses a canonical type registry, ensuring resolved types have complete field definitions
+- Made `build_type_map` public in introspection module for building type registries
+- Added `get_union_type_resolver` to extract the type resolver function from union types
+- Added `resolve_union_type_with_registry` for registry-based union resolution
+
 ## 2.1.1
 
 ### Fixed

@@ -1084,3 +1084,200 @@ pub fn list_argument_accepts_list_test() {
     _ -> should.fail()
   }
 }
+
+// Test: Union resolution uses canonical type registry
+// This verifies that when resolving a union type, all fields from the
+// canonical type definition are accessible, not just those from the
+// union's internal possible_types copy
+pub fn execute_union_with_all_fields_via_registry_test() {
+  // Create a type with multiple fields to verify complete resolution
+  let article_type =
+    schema.object_type("Article", "An article", [
+      schema.field("id", schema.id_type(), "Article ID", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "id") {
+              Ok(id_val) -> Ok(id_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("title", schema.string_type(), "Article title", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "title") {
+              Ok(title_val) -> Ok(title_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("body", schema.string_type(), "Article body", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "body") {
+              Ok(body_val) -> Ok(body_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("author", schema.string_type(), "Article author", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "author") {
+              Ok(author_val) -> Ok(author_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  let video_type =
+    schema.object_type("Video", "A video", [
+      schema.field("id", schema.id_type(), "Video ID", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "id") {
+              Ok(id_val) -> Ok(id_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("title", schema.string_type(), "Video title", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "title") {
+              Ok(title_val) -> Ok(title_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      schema.field("duration", schema.int_type(), "Video duration", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "duration") {
+              Ok(duration_val) -> Ok(duration_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  // Type resolver that examines the __typename field
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case ctx.data {
+      option.Some(value.Object(fields)) -> {
+        case list.key_find(fields, "__typename") {
+          Ok(value.String(type_name)) -> Ok(type_name)
+          _ -> Error("No __typename field found")
+        }
+      }
+      _ -> Error("No data")
+    }
+  }
+
+  // Create union type
+  let content_union =
+    schema.union_type(
+      "Content",
+      "Content union",
+      [article_type, video_type],
+      type_resolver,
+    )
+
+  // Create query type with a field returning the union
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field("content", content_union, "Get content", fn(_ctx) {
+        // Return an Article with all fields populated
+        Ok(
+          value.Object([
+            #("__typename", value.String("Article")),
+            #("id", value.String("article-1")),
+            #("title", value.String("GraphQL Best Practices")),
+            #("body", value.String("Here are some tips...")),
+            #("author", value.String("Jane Doe")),
+          ]),
+        )
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query requesting ALL fields from the Article type
+  // If the type registry works correctly, all 4 fields should be returned
+  let query =
+    "
+    {
+      content {
+        ... on Article {
+          id
+          title
+          body
+          author
+        }
+        ... on Video {
+          id
+          title
+          duration
+        }
+      }
+    }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  case result {
+    Ok(executor.Response(value.Object(fields), errors)) -> {
+      // Should have no errors
+      list.length(errors)
+      |> should.equal(0)
+
+      // Check the content field
+      case list.key_find(fields, "content") {
+        Ok(value.Object(content_fields)) -> {
+          // Should have all 4 Article fields
+          list.length(content_fields)
+          |> should.equal(4)
+
+          // Verify each field is present with correct value
+          case list.key_find(content_fields, "id") {
+            Ok(value.String("article-1")) -> should.be_true(True)
+            _ -> should.fail()
+          }
+          case list.key_find(content_fields, "title") {
+            Ok(value.String("GraphQL Best Practices")) -> should.be_true(True)
+            _ -> should.fail()
+          }
+          case list.key_find(content_fields, "body") {
+            Ok(value.String("Here are some tips...")) -> should.be_true(True)
+            _ -> should.fail()
+          }
+          case list.key_find(content_fields, "author") {
+            Ok(value.String("Jane Doe")) -> should.be_true(True)
+            _ -> should.fail()
+          }
+        }
+        _ -> should.fail()
+      }
+    }
+    Error(err) -> {
+      // Print error for debugging
+      should.equal(err, "")
+    }
+    _ -> should.fail()
+  }
+}

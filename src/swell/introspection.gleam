@@ -102,7 +102,48 @@ pub fn get_all_schema_types(graphql_schema: schema.Schema) -> List(schema.Type) 
       !list.contains(collected_names, built_in_name)
     })
 
-  list.append(unique_types, missing_built_ins)
+  let all_types = list.append(unique_types, missing_built_ins)
+
+  // Build a canonical type map for normalization
+  let type_map = build_type_map(all_types)
+
+  // Normalize union types so their possible_types reference canonical instances
+  list.map(all_types, fn(t) { normalize_union_possible_types(t, type_map) })
+}
+
+/// Build a map from type name to canonical type instance
+/// This creates a registry that can be used to look up types by name,
+/// ensuring consistent type references throughout the system.
+pub fn build_type_map(
+  types: List(schema.Type),
+) -> dict.Dict(String, schema.Type) {
+  list.fold(types, dict.new(), fn(acc, t) {
+    dict.insert(acc, schema.type_name(t), t)
+  })
+}
+
+/// For union types, replace possible_types with canonical instances from the type map
+/// This ensures union.possible_types returns the same instances as found elsewhere
+fn normalize_union_possible_types(
+  t: schema.Type,
+  type_map: dict.Dict(String, schema.Type),
+) -> schema.Type {
+  case schema.is_union(t) {
+    True -> {
+      let original_possible = schema.get_possible_types(t)
+      let normalized_possible =
+        list.filter_map(original_possible, fn(pt) {
+          dict.get(type_map, schema.type_name(pt))
+        })
+      schema.union_type(
+        schema.type_name(t),
+        schema.type_description(t),
+        normalized_possible,
+        schema.get_union_type_resolver(t),
+      )
+    }
+    False -> t
+  }
 }
 
 /// Get all types from the schema
