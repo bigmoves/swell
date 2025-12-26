@@ -1375,34 +1375,37 @@ pub fn execute_non_null_union_resolves_correctly_test() {
   // Create query type returning a list of edges
   let query_type =
     schema.object_type("Query", "Root query type", [
-      schema.field("notifications", schema.list_type(edge_type), "Get notifications", fn(
-        _ctx,
-      ) {
-        Ok(
-          value.List([
-            value.Object([
-              #(
-                "node",
-                value.Object([
-                  #("type", value.String("Like")),
-                  #("uri", value.String("at://user/like/1")),
-                ]),
-              ),
-              #("cursor", value.String("cursor1")),
+      schema.field(
+        "notifications",
+        schema.list_type(edge_type),
+        "Get notifications",
+        fn(_ctx) {
+          Ok(
+            value.List([
+              value.Object([
+                #(
+                  "node",
+                  value.Object([
+                    #("type", value.String("Like")),
+                    #("uri", value.String("at://user/like/1")),
+                  ]),
+                ),
+                #("cursor", value.String("cursor1")),
+              ]),
+              value.Object([
+                #(
+                  "node",
+                  value.Object([
+                    #("type", value.String("Follow")),
+                    #("uri", value.String("at://user/follow/1")),
+                  ]),
+                ),
+                #("cursor", value.String("cursor2")),
+              ]),
             ]),
-            value.Object([
-              #(
-                "node",
-                value.Object([
-                  #("type", value.String("Follow")),
-                  #("uri", value.String("at://user/follow/1")),
-                ]),
-              ),
-              #("cursor", value.String("cursor2")),
-            ]),
-          ]),
-        )
-      }),
+          )
+        },
+      ),
     ])
 
   let test_schema = schema.schema(query_type, None)
@@ -1445,8 +1448,7 @@ pub fn execute_non_null_union_resolves_correctly_test() {
                       // __typename should be "Like" (resolved from union)
                       case list.key_find(node_fields, "__typename") {
                         Ok(value.String("Like")) -> should.be_true(True)
-                        Ok(value.String(other)) ->
-                          should.equal(other, "Like")
+                        Ok(value.String(other)) -> should.equal(other, "Like")
                         _ -> should.fail()
                       }
                       // uri should be resolved from inline fragment

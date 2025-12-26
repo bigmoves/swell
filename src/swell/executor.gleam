@@ -567,7 +567,8 @@ fn execute_selection(
                                 option.Some(t) -> t
                                 option.None -> field_type_def
                               }
-                              let type_to_use = case schema.is_union(unwrapped_type)
+                              let type_to_use = case
+                                schema.is_union(unwrapped_type)
                               {
                                 True -> {
                                   // Create context with the field value for type resolution
