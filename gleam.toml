@@ -1,5 +1,5 @@
 name = "swell"
-version = "2.1.2"
+version = "2.1.3"
 description = "🌊 A GraphQL implementation in Gleam"
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "bigmoves", repo = "swell" }

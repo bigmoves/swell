@@ -560,8 +560,14 @@ fn execute_selection(
                             value.Object(_) -> {
                               // Check if field_type_def is a union type
                               // If so, resolve it to the concrete type first using the registry
-                              let type_to_use = case
-                                schema.is_union(field_type_def)
+                              // Need to unwrap NonNull first since is_union only matches bare UnionType
+                              let unwrapped_type = case
+                                schema.inner_type(field_type_def)
+                              {
+                                option.Some(t) -> t
+                                option.None -> field_type_def
+                              }
+                              let type_to_use = case schema.is_union(unwrapped_type)
                               {
                                 True -> {
                                   // Create context with the field value for type resolution
@@ -569,7 +575,7 @@ fn execute_selection(
                                     schema.context(option.Some(field_value))
                                   case
                                     schema.resolve_union_type_with_registry(
-                                      field_type_def,
+                                      unwrapped_type,
                                       resolve_ctx,
                                       type_registry,
                                     )

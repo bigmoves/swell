@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3
+
+### Fixed
+
+- Union type resolution now works for fields wrapped in NonNull (e.g., `NonNull(UnionType)`). Previously, the executor only checked for bare `UnionType`, missing cases where unions were wrapped.
+
 ## 2.1.2
 
 ### Fixed

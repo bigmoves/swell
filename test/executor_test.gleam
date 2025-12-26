@@ -1281,3 +1281,195 @@ pub fn execute_union_with_all_fields_via_registry_test() {
     _ -> should.fail()
   }
 }
+
+// Test: Union type wrapped in NonNull resolves correctly
+// This tests the fix for fields like `node: NonNull(UnionType)` in connections
+// Previously, is_union check failed because it only matched bare UnionType
+pub fn execute_non_null_union_resolves_correctly_test() {
+  // Create object types that will be part of the union
+  let like_type =
+    schema.object_type("Like", "A like record", [
+      schema.field("uri", schema.string_type(), "Like URI", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "uri") {
+              Ok(uri_val) -> Ok(uri_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  let follow_type =
+    schema.object_type("Follow", "A follow record", [
+      schema.field("uri", schema.string_type(), "Follow URI", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "uri") {
+              Ok(uri_val) -> Ok(uri_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  // Type resolver that examines the "type" field
+  let type_resolver = fn(ctx: schema.Context) -> Result(String, String) {
+    case ctx.data {
+      option.Some(value.Object(fields)) -> {
+        case list.key_find(fields, "type") {
+          Ok(value.String(type_name)) -> Ok(type_name)
+          _ -> Error("No type field found")
+        }
+      }
+      _ -> Error("No data")
+    }
+  }
+
+  // Create union type
+  let notification_union =
+    schema.union_type(
+      "NotificationRecord",
+      "A notification record",
+      [like_type, follow_type],
+      type_resolver,
+    )
+
+  // Create edge type with node wrapped in NonNull - this is the key scenario
+  let edge_type =
+    schema.object_type("NotificationEdge", "An edge in the connection", [
+      schema.field(
+        "node",
+        schema.non_null(notification_union),
+        // NonNull wrapping union
+        "The notification record",
+        fn(ctx) {
+          case ctx.data {
+            option.Some(value.Object(fields)) -> {
+              case list.key_find(fields, "node") {
+                Ok(node_val) -> Ok(node_val)
+                Error(_) -> Ok(value.Null)
+              }
+            }
+            _ -> Ok(value.Null)
+          }
+        },
+      ),
+      schema.field("cursor", schema.string_type(), "Cursor", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "cursor") {
+              Ok(cursor_val) -> Ok(cursor_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+    ])
+
+  // Create query type returning a list of edges
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field("notifications", schema.list_type(edge_type), "Get notifications", fn(
+        _ctx,
+      ) {
+        Ok(
+          value.List([
+            value.Object([
+              #(
+                "node",
+                value.Object([
+                  #("type", value.String("Like")),
+                  #("uri", value.String("at://user/like/1")),
+                ]),
+              ),
+              #("cursor", value.String("cursor1")),
+            ]),
+            value.Object([
+              #(
+                "node",
+                value.Object([
+                  #("type", value.String("Follow")),
+                  #("uri", value.String("at://user/follow/1")),
+                ]),
+              ),
+              #("cursor", value.String("cursor2")),
+            ]),
+          ]),
+        )
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query with inline fragments on the NonNull-wrapped union
+  let query =
+    "
+    {
+      notifications {
+        cursor
+        node {
+          __typename
+          ... on Like {
+            uri
+          }
+          ... on Follow {
+            uri
+          }
+        }
+      }
+    }
+    "
+
+  let result = executor.execute(query, test_schema, schema.context(None))
+
+  case result {
+    Ok(response) -> {
+      case response.data {
+        value.Object(fields) -> {
+          case list.key_find(fields, "notifications") {
+            Ok(value.List(edges)) -> {
+              // Should have 2 edges
+              list.length(edges) |> should.equal(2)
+
+              // First edge should be a Like with resolved fields
+              case list.first(edges) {
+                Ok(value.Object(edge_fields)) -> {
+                  case list.key_find(edge_fields, "node") {
+                    Ok(value.Object(node_fields)) -> {
+                      // __typename should be "Like" (resolved from union)
+                      case list.key_find(node_fields, "__typename") {
+                        Ok(value.String("Like")) -> should.be_true(True)
+                        Ok(value.String(other)) ->
+                          should.equal(other, "Like")
+                        _ -> should.fail()
+                      }
+                      // uri should be resolved from inline fragment
+                      case list.key_find(node_fields, "uri") {
+                        Ok(value.String("at://user/like/1")) ->
+                          should.be_true(True)
+                        _ -> should.fail()
+                      }
+                    }
+                    _ -> should.fail()
+                  }
+                }
+                _ -> should.fail()
+              }
+            }
+            _ -> should.fail()
+          }
+        }
+        _ -> should.fail()
+      }
+    }
+    Error(err) -> {
+      should.equal(err, "")
+    }
+  }
+}
