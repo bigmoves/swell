@@ -590,9 +590,12 @@ fn execute_selection(
                               }
 
                               // Execute nested selections using the resolved type
-                              // Create new context with this object's data
+                              // Create new context with this object's data, preserving variables
                               let object_ctx =
-                                schema.context(option.Some(field_value))
+                                schema.context_with_variables(
+                                  option.Some(field_value),
+                                  ctx.variables,
+                                )
                               let selection_set =
                                 parser.SelectionSet(nested_selections)
                               case
@@ -667,9 +670,12 @@ fn execute_selection(
                                     False -> inner_type
                                   }
 
-                                  // Create context with this item's data
+                                  // Create context with this item's data, preserving variables
                                   let item_ctx =
-                                    schema.context(option.Some(item))
+                                    schema.context_with_variables(
+                                      option.Some(item),
+                                      ctx.variables,
+                                    )
                                   execute_selection_set(
                                     selection_set,
                                     item_type,

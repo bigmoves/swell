@@ -1282,6 +1282,200 @@ pub fn execute_union_with_all_fields_via_registry_test() {
   }
 }
 
+// Test: Variables are preserved in nested object selections
+// This verifies that when traversing into a nested object, variables
+// from the parent context are still accessible
+pub fn execute_variables_preserved_in_nested_object_test() {
+  // Create a nested type structure where the nested resolver needs access to variables
+  let post_type =
+    schema.object_type("Post", "A post", [
+      schema.field("title", schema.string_type(), "Post title", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "title") {
+              Ok(title_val) -> Ok(title_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      // This field uses a variable from the outer context
+      schema.field_with_args(
+        "formattedTitle",
+        schema.string_type(),
+        "Formatted title",
+        [schema.argument("prefix", schema.string_type(), "Prefix to add", None)],
+        fn(ctx) {
+          let prefix = case schema.get_argument(ctx, "prefix") {
+            Some(value.String(p)) -> p
+            _ -> ""
+          }
+          case ctx.data {
+            option.Some(value.Object(fields)) -> {
+              case list.key_find(fields, "title") {
+                Ok(value.String(title)) ->
+                  Ok(value.String(prefix <> ": " <> title))
+                _ -> Ok(value.Null)
+              }
+            }
+            _ -> Ok(value.Null)
+          }
+        },
+      ),
+    ])
+
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field("post", post_type, "Get a post", fn(_ctx) {
+        Ok(value.Object([#("title", value.String("Hello World"))]))
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query using a variable in a nested field
+  let query =
+    "query GetPost($prefix: String!) { post { formattedTitle(prefix: $prefix) } }"
+
+  // Create context with variables
+  let variables = dict.from_list([#("prefix", value.String("Article"))])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  case result {
+    Ok(executor.Response(data: value.Object(fields), errors: _)) -> {
+      case list.key_find(fields, "post") {
+        Ok(value.Object(post_fields)) -> {
+          case list.key_find(post_fields, "formattedTitle") {
+            Ok(value.String("Article: Hello World")) -> should.be_true(True)
+            Ok(other) -> {
+              // Variable was lost - this is the bug we're testing for
+              should.equal(other, value.String("Article: Hello World"))
+            }
+            Error(_) -> should.fail()
+          }
+        }
+        _ -> should.fail()
+      }
+    }
+    Error(err) -> should.equal(err, "")
+    _ -> should.fail()
+  }
+}
+
+// Test: Variables are preserved in nested list item selections
+// This verifies that when iterating over list items, variables
+// from the parent context are still accessible to each item's resolvers
+pub fn execute_variables_preserved_in_nested_list_test() {
+  // Create a type structure where list item resolvers need access to variables
+  let item_type =
+    schema.object_type("Item", "An item", [
+      schema.field("name", schema.string_type(), "Item name", fn(ctx) {
+        case ctx.data {
+          option.Some(value.Object(fields)) -> {
+            case list.key_find(fields, "name") {
+              Ok(name_val) -> Ok(name_val)
+              Error(_) -> Ok(value.Null)
+            }
+          }
+          _ -> Ok(value.Null)
+        }
+      }),
+      // This field uses a variable from the outer context
+      schema.field_with_args(
+        "formattedName",
+        schema.string_type(),
+        "Formatted name",
+        [schema.argument("suffix", schema.string_type(), "Suffix to add", None)],
+        fn(ctx) {
+          let suffix = case schema.get_argument(ctx, "suffix") {
+            Some(value.String(s)) -> s
+            _ -> ""
+          }
+          case ctx.data {
+            option.Some(value.Object(fields)) -> {
+              case list.key_find(fields, "name") {
+                Ok(value.String(name)) ->
+                  Ok(value.String(name <> " " <> suffix))
+                _ -> Ok(value.Null)
+              }
+            }
+            _ -> Ok(value.Null)
+          }
+        },
+      ),
+    ])
+
+  let query_type =
+    schema.object_type("Query", "Root query type", [
+      schema.field("items", schema.list_type(item_type), "Get items", fn(_ctx) {
+        Ok(
+          value.List([
+            value.Object([#("name", value.String("Apple"))]),
+            value.Object([#("name", value.String("Banana"))]),
+          ]),
+        )
+      }),
+    ])
+
+  let test_schema = schema.schema(query_type, None)
+
+  // Query using a variable in nested list item fields
+  let query =
+    "query GetItems($suffix: String!) { items { formattedName(suffix: $suffix) } }"
+
+  // Create context with variables
+  let variables = dict.from_list([#("suffix", value.String("(organic)"))])
+  let ctx = schema.context_with_variables(None, variables)
+
+  let result = executor.execute(query, test_schema, ctx)
+
+  case result {
+    Ok(executor.Response(data: value.Object(fields), errors: _)) -> {
+      case list.key_find(fields, "items") {
+        Ok(value.List(items)) -> {
+          // Should have 2 items
+          list.length(items) |> should.equal(2)
+
+          // First item should have formatted name with suffix
+          case list.first(items) {
+            Ok(value.Object(item_fields)) -> {
+              case list.key_find(item_fields, "formattedName") {
+                Ok(value.String("Apple (organic)")) -> should.be_true(True)
+                Ok(other) -> {
+                  // Variable was lost - this is the bug we're testing for
+                  should.equal(other, value.String("Apple (organic)"))
+                }
+                Error(_) -> should.fail()
+              }
+            }
+            _ -> should.fail()
+          }
+
+          // Second item should also have formatted name with suffix
+          case list.drop(items, 1) {
+            [value.Object(item_fields), ..] -> {
+              case list.key_find(item_fields, "formattedName") {
+                Ok(value.String("Banana (organic)")) -> should.be_true(True)
+                Ok(other) -> {
+                  should.equal(other, value.String("Banana (organic)"))
+                }
+                Error(_) -> should.fail()
+              }
+            }
+            _ -> should.fail()
+          }
+        }
+        _ -> should.fail()
+      }
+    }
+    Error(err) -> should.equal(err, "")
+    _ -> should.fail()
+  }
+}
+
 // Test: Union type wrapped in NonNull resolves correctly
 // This tests the fix for fields like `node: NonNull(UnionType)` in connections
 // Previously, is_union check failed because it only matched bare UnionType

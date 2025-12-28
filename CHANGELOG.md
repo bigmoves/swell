@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.4
+
+### Fixed
+
+- Variables are now preserved when executing nested object and list selections. Previously, variables were lost when traversing into nested contexts, causing variable references in nested fields to resolve as empty.
+
 ## 2.1.3
 
 ### Fixed
